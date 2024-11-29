@@ -52,7 +52,7 @@ app.post('/api/register/', async (req, res)=>{
             return res.status(200).json({message:'Registerd'});
           }
           else{
-            return res.status(500).send('Error sending mail')
+            return res.status(500).send({error : 'Error sending mail'})
           }
 
     }
@@ -82,7 +82,10 @@ app.post('/api/login', async (req, res) => {
         const userDoc = querySnapshot.docs[0]; 
         const user = userDoc.data();
 
+        console.log(user)
+
         const validPassword = await bcrypt.compare(pass, user.password);
+
 
         if (!validPassword) {
             return res.status(401).send({message : 'User not found'});
