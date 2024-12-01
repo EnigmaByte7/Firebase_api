@@ -93,6 +93,7 @@ app.post('/api/login', async (req, res) => {
 
         return res.status(200).send({
             message: 'Login successful',
+            userID:userDoc.id,
             user: user
         });
 
@@ -101,5 +102,207 @@ app.post('/api/login', async (req, res) => {
         return res.status(500).send({ message : 'Server error during login.'});
     }
 });
+
+app.post('/add-task', async (req, res) => {
+  const { tname, tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by } = req.body;
+
+  try {
+    const taskRef = db.collection('tasks').doc();
+    await taskRef.set({
+      tname,
+      tdesc,
+      tcatg,
+      tstat,
+      tsub,
+      tdead,
+      tfileUrl, 
+      by
+    });
+
+    res.status(200).send({ message: 'Task successfully added!' });
+  } catch (error) {
+    res.status(500).send({ message: 'Error saving task to Firebase', error });
+  }
+});
+
+
+app.get('/get-tasks', async (req, res) => {
+  try {
+    const snapshot = await db.collection('tasks').get();
+    const tasks = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    res.status(200).send(tasks);
+  } catch (error) {
+    res.status(500).send({ message: 'Error fetching tasks from Firebase', error });
+  }
+});
+
+app.get('/tasks/:id', async (req, res) => {
+  try {
+    const taskRef = db.collection('tasks').doc(req.params.id);
+    const task = await taskRef.get();
+
+    if (!task.exists) {
+      return res.status(404).send({ message: 'Task not found' });
+    }
+
+    res.status(200).send(task.data());
+  } catch (error) {
+    res.status(500).send({ message: 'Error fetching task', error });
+  }
+});
+
+app.post('/api/submit-task', async (req, res) => {
+  const { taskId, submissionUrl, userId } = req.body;
+
+  try {
+    const submissionRef = db.collection('submissions').doc(); 
+    const submissionData = {
+      taskId,
+      submissionUrl,
+      userId,
+    };
+
+    await submissionRef.set(submissionData);
+
+    res.status(200).send({
+      message: 'Submission created successfully',
+      submissionId: submissionRef.id,
+    });
+  } catch (error) {
+    console.error('Error creating submission:', error.message);
+    res.status(500).send({ error: 'Failed to create submission' });
+  }
+});
+
+app.post('/api/update/:userId', async (req, res) => {
+  const { userId } = req.params; 
+  console.log('Fetching user with ID:', userId);
+  const { submissionId } = req.body;
+  console.log(userId, submissionId)
+
+  try {
+    const userRef = db.collection('users').doc(userId); 
+
+    const userDoc = await userRef.get();
+    console.log(userDoc)
+
+    if (!userDoc.exists) {
+      return res.status(404).send({ error: 'User not found' });
+    }
+
+    const userData = userDoc.data();
+    const updatedSubmissions = [...(userData.submissions || []), submissionId];
+    await userRef.update({ submissions: updatedSubmissions });
+
+    res.status(200).send({ message: 'User submissions updated successfully' });
+  } catch (error) {
+    console.error('Error updating user submissions:', error.message);
+    res.status(500).send({ error: 'Failed to update user submissions' });
+  }
+});
+
+
+
+app.get('/api/get-user/:userId', async (req, res) => {
+  const { userId } = req.params; 
+  console.log('Fetching user with ID:', userId);
+
+  try {
+    const userRef = db.collection('users').doc(userId); 
+    const userDoc = await userRef.get(); 
+    console.log(userDoc)
+
+    if (!userDoc.exists) {
+      console.log(`User with ID ${userId} not found.`);
+      return res.status(404).send({ message: 'User not found.' });
+    }
+
+    const userData = { id: userDoc.id, ...userDoc.data() }; 
+    console.log('User data:', userData);
+    res.status(200).send(userData); 
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).send({ error: 'Failed to fetch user.' });
+  }
+});
+
+
+app.get('/pending/:adminId', async (req, res) => {
+  const { adminId } = req.params;
+
+  console.log(adminId)
+  try {
+    const usersRef = admin.firestore().collection('users');
+    const snapshot = await usersRef
+      .where('ups', '==', 0)
+      .where('downs', '==', 0)
+      .where('isblacklisted', '==', 'no')
+      .get();
+
+    if (snapshot.empty) {
+      return res.status(200).json([]);
+    }
+
+    const pendingApplicants = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(user => !(user.approvedby || []).includes(adminId));
+
+    res.status(200).json(pendingApplicants);
+  } catch (error) {
+    console.error('Error fetching pending applicants:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/get-submissions/:userId', async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).send({ message: 'User not found.' });
+    }
+
+    const userData = userDoc.data();
+    const submissionIds = userData.submissions || [];
+
+    if (submissionIds.length === 0) {
+      return res.status(200).send([]); 
+    }
+
+    const results = [];
+
+    for (const submissionId of submissionIds) {
+      const submissionDoc = await db.collection('submissions').doc(submissionId).get();
+      if (!submissionDoc.exists) {
+        console.warn(`Submission with ID ${submissionId} not found.`);
+        continue;
+      }
+
+      const submissionData = submissionDoc.data();
+
+      const taskDoc = await db.collection('tasks').doc(submissionData.taskId).get();
+      if (!taskDoc.exists) {
+        console.warn(`Task with ID ${submissionData.taskId} not found.`);
+        continue;
+      }
+
+      const taskData = taskDoc.data();
+
+      results.push({
+        taskName: taskData.tname, 
+        fileUrl: submissionData.submissionUrl,
+      });
+    }
+
+    console.log(results)
+
+    res.status(200).send(results); 
+  } catch (error) {
+    console.error('Error fetching user submissions:', error);
+    res.status(500).send({ error: 'Failed to fetch user submissions.' });
+  }
+});
+
 
 exports.app = onRequest(app);
