@@ -443,5 +443,51 @@ app.post('/api/blacklist', async (req, res) => {
   }
 });
 
+app.post('/leaderboard', async (req, res) => {
+  try {
+    const { domain } = req.body;
+    const adminDomain = domain;
+
+    if (!adminDomain) {
+      return res.status(400).json({ error: 'Domain is required' });
+    }
+
+    const usersSnapshot = await db.collection('users').get();
+    console.log("Fetched users snapshot:", usersSnapshot.docs.length);  
+
+    let leaderboard = usersSnapshot.docs
+      .map(doc => doc.data())
+      .filter(user => {
+        return (  
+          !user.email.includes('admin') &&  
+          user.domain === adminDomain &&  
+          !user.blacklisted  
+        );
+      })
+      .map(user => ({
+        name: user.name,
+        ups: user.ups || 0, 
+        downs: user.downs || 0,  
+        net: (user.ups || 0) - (user.downs || 0), 
+      }));
+
+    leaderboard = leaderboard.map((user, index) => {
+      const doc = usersSnapshot.docs[index];
+      return {
+        ...user,
+        id: doc.id,  
+      };
+    });
+
+
+    leaderboard.sort((a, b) => b.net - a.net);
+
+    return res.json(leaderboard);
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 exports.app = onRequest(app);
