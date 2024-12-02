@@ -49,6 +49,7 @@ app.post('/api/register/', async (req, res)=>{
 
           if(sent.accepted.length > 0){
             let doc = await db.collection('users').add(profile);
+            console.log(profile)
             return res.status(200).json({message:'Registerd'});
           }
           else{
@@ -230,7 +231,7 @@ app.get('/api/get-user/:userId', async (req, res) => {
 app.get('/pending/:adminId', async (req, res) => {
   const { adminId } = req.params;
 
-  console.log(adminId)
+  console.log(adminId);
   try {
     const usersRef = admin.firestore().collection('users');
     const snapshot = await usersRef
@@ -245,7 +246,10 @@ app.get('/pending/:adminId', async (req, res) => {
 
     const pendingApplicants = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(user => !(user.approvedby || []).includes(adminId));
+      .filter(
+        user => !((user.email || '').includes('admin')) &&
+                !(user.approvedby || []).includes(adminId)
+      );
 
     res.status(200).json(pendingApplicants);
   } catch (error) {
@@ -253,6 +257,7 @@ app.get('/pending/:adminId', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 app.get('/api/get-submissions/:userId', async (req, res) => {
   const { userId } = req.params;
@@ -301,6 +306,140 @@ app.get('/api/get-submissions/:userId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching user submissions:', error);
     res.status(500).send({ error: 'Failed to fetch user submissions.' });
+  }
+});
+
+
+app.post('/api/upvote', async (req, res) => {
+  const { adminId, userId } = req.body;
+  console.log(adminId, userId)
+
+  try {
+    const userRef = db.collection('users').doc(userId);
+    const adminRef = db.collection('users').doc(adminId);
+
+    const userDoc = await userRef.get();
+    const adminDoc = await adminRef.get();
+
+    if (!userDoc.exists || !adminDoc.exists) {
+      return res.status(404).send({ message: 'User or Admin not found.' });
+    }
+
+    const userData = userDoc.data();
+    const adminData = adminDoc.data();
+
+    
+    if (userData.approvedby && userData.approvedby.includes(adminId)) {
+      return res.status(400).send({ message: 'Admin has already approved this user.' });
+    }
+
+    await userRef.update({ ups: userData.ups + 1 });
+    await userRef.update({ approvedby: adminData.approvedby ? [...adminData.approvedby, adminId] : [adminId] });
+
+    await adminRef.update({ approvedby: adminData.approvedby ? [...adminData.approvedby, userId] : [userId] });
+
+    return res.status(200).send({ message: 'Upvoted successfully.' });
+  } catch (error) {
+    console.error('Error during upvote:', error);
+    return res.status(500).send({ message: 'Server error during upvote.' });
+  }
+});
+
+app.post('/api/downvote', async (req, res) => {
+  const { adminId, userId } = req.body;
+
+  try {
+    const userRef = db.collection('users').doc(userId);
+    const adminRef = db.collection('users').doc(adminId);
+
+    const userDoc = await userRef.get();
+    const adminDoc = await adminRef.get();
+
+    if (!userDoc.exists || !adminDoc.exists) {
+      return res.status(404).send({ message: 'User or Admin not found.' });
+    }
+
+    const userData = userDoc.data();
+    const adminData = adminDoc.data();
+
+    
+    if (userData.approvedby && userData.approvedby.includes(adminId)) {
+      return res.status(400).send({ message: 'Admin has already approved this user.' });
+    }
+
+    await userRef.update({ downs: userData.downs + 1 });
+    await userRef.update({ approvedby: adminData.approvedby ? [...adminData.approvedby, adminId] : [adminId] });
+
+    await adminRef.update({ approvedby: adminData.approvedby ? [...adminData.approvedby, userId] : [userId] });
+
+    return res.status(200).send({ message: 'Downvoted successfully.' });
+  } catch (error) {
+    console.error('Error during downvote:', error);
+    return res.status(500).send({ message: 'Server error during downvote.' });
+  }
+});
+
+app.post('/api/bookmark', async (req, res) => {
+  const { adminId, userId } = req.body;
+
+  try {
+    const userRef = db.collection('users').doc(userId);
+    const adminRef = db.collection('users').doc(adminId);
+
+    const userDoc = await userRef.get();
+    const adminDoc = await adminRef.get();
+
+    if (!userDoc.exists || !adminDoc.exists) {
+      return res.status(404).send({ message: 'User or Admin not found.' });
+    }
+
+    const userData = userDoc.data();
+    const adminData = adminDoc.data();
+
+    let message = '';
+    if (userData.submissions.includes(userId)) {
+      await adminRef.update({
+        submissions: adminData.submissions.filter((subId) => subId !== userId),
+      });
+      message = 'Unbookmarked successfully';
+    } else {
+      await adminRef.update({
+        submissions: [...adminData.submissions, userId],
+      });
+      message = 'Bookmarked successfully';
+    }
+
+    return res.status(200).send({ message });
+  } catch (error) {
+    console.error('Error during bookmark operation:', error);
+    return res.status(500).send({ message: 'Server error during bookmark operation.' });
+  }
+});
+
+app.post('/api/blacklist', async (req, res) => {
+  const { adminId, userId } = req.body;
+
+  try {
+    const userRef = db.collection('users').doc(userId);
+
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).send({ message: 'User not found.' });
+    }
+
+    const userData = userDoc.data();
+
+    if (userData.isblacklisted === 'yes') {
+      return res.status(400).send({ message: 'User is already blacklisted.' });
+    }
+
+    await userRef.update({ isblacklisted: 'yes' });
+
+    return res.status(200).send({ message: 'User blacklisted successfully.' });
+  } catch (error) {
+    console.error('Error during blacklist operation:', error);
+    return res.status(500).send({ message: 'Server error during blacklist operation.' });
   }
 });
 
