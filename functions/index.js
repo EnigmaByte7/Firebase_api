@@ -105,7 +105,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/add-task', async (req, res) => {
-  const { tname, tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by } = req.body;
+  const { tname, tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by, adminid } = req.body;
 
   try {
     const taskRef = db.collection('tasks').doc();
@@ -117,7 +117,8 @@ app.post('/add-task', async (req, res) => {
       tsub,
       tdead,
       tfileUrl, 
-      by
+      by,
+      adminid
     });
 
     res.status(200).send({ message: 'Task successfully added!' });
@@ -488,6 +489,91 @@ app.post('/leaderboard', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+app.get('/api/bookmarked/:adminId', async (req, res) => {
+  const { adminId } = req.params;
+
+  try {
+    const adminDoc = await db.collection('users').doc(adminId).get();
+    if (!adminDoc.exists) {
+      return res.status(404).send({ message: 'Admin not found.' });
+    }
+
+    const adminData = adminDoc.data();
+    const submissionIds = adminData.submissions || [];
+
+    if (submissionIds.length === 0) {
+      return res.status(200).send([]); 
+    }
+
+    const users = [];
+    for (const userId of submissionIds) {
+      const userDoc = await db.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        const userData = { id: userDoc.id, name: userDoc.data().name };
+        users.push(userData);
+      }
+    }
+
+    res.status(200).send(users);
+  } catch (error) {
+    console.error('Error fetching bookmarked users:', error);
+    res.status(500).send({ error: 'Failed to fetch bookmarked users.' });
+  }
+});
+
+app.delete('/api/delete-bookmark/:adminId/:userId', async (req, res) => {
+  const { adminId, userId } = req.params;
+
+  try {
+    const adminRef = db.collection('users').doc(adminId);
+    const adminDoc = await adminRef.get();
+
+    if (!adminDoc.exists) {
+      return res.status(404).send({ message: 'Admin not found.' });
+    }
+
+    const adminData = adminDoc.data();
+    const updatedSubmissions = (adminData.submissions || []).filter((id) => id !== userId);
+
+    await adminRef.update({ submissions: updatedSubmissions });
+
+    res.status(200).send({ message: 'Bookmark deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting bookmark:', error);
+    res.status(500).send({ error: 'Failed to delete bookmark.' });
+  }
+});
+
+
+app.get('/api/users/:domain', async (req, res) => {
+  const { domain } = req.params;
+  console.log(domain)
+
+  if (!domain) {
+    return res.status(400).json({ error: 'Domain is required' });
+  }
+
+  try {
+    const usersSnapshot = await db.collection('users').where('domain', '==', domain).get();
+    const users = [];
+    usersSnapshot.forEach(doc => {
+      const userData = doc.data();
+      if (!userData.email.includes('admin')) {
+        users.push({ id: doc.id, ...userData });
+      }
+    });
+
+
+    console.log(users)
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 
 
 exports.app = onRequest(app);
