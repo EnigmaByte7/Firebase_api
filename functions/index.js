@@ -142,7 +142,6 @@ app.get('/tasks/:id', async (req, res) => {
   try {
     const taskRef = db.collection('tasks').doc(req.params.id);
     const task = await taskRef.get();
-
     if (!task.exists) {
       return res.status(404).send({ message: 'Task not found' });
     }
@@ -152,6 +151,39 @@ app.get('/tasks/:id', async (req, res) => {
     res.status(500).send({ message: 'Error fetching task', error });
   }
 });
+
+app.post('/update-task/:id', async (req, res) => {
+  const { id } = req.params;
+  const { tname, tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by, adminid } = req.body;
+  console.log(id, tname,  tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by, adminid)
+
+  try {
+    const taskRef = db.collection('tasks').doc(id);
+    const taskSnapshot = await taskRef.get();
+    console.log(taskSnapshot)
+
+    if (!taskSnapshot.exists) {
+      return res.status(404).send({ message: 'Task not found!' });
+    }
+
+    await taskRef.update({
+      tname,
+      tdesc,
+      tcatg,
+      tstat,
+      tsub,
+      tdead,
+      tfileUrl,
+      by,
+      adminid,
+    });
+
+    res.status(200).send({ message: 'Task successfully updated!' });
+  } catch (error) {
+    res.status(500).send({ message: 'Error updating task in Firebase', error });
+  }
+});
+
 
 app.post('/api/submit-task', async (req, res) => {
   const { taskId, submissionUrl, userId } = req.body;
