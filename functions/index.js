@@ -105,7 +105,7 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/add-task', async (req, res) => {
-  const { tname, tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by, adminid } = req.body;
+  const { tname, tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by, adminid, domain } = req.body;
 
   try {
     const taskRef = db.collection('tasks').doc();
@@ -118,7 +118,8 @@ app.post('/add-task', async (req, res) => {
       tdead,
       tfileUrl, 
       by,
-      adminid
+      adminid,
+      domain
     });
 
     res.status(200).send({ message: 'Task successfully added!' });
@@ -137,6 +138,32 @@ app.get('/get-tasks', async (req, res) => {
     res.status(500).send({ message: 'Error fetching tasks from Firebase', error });
   }
 });
+
+app.post('/get-tasks-by-domain', async (req, res) => {
+  const { domain } = req.body;
+  console.log(domain, "heloo")
+
+  if (!domain) {
+    return res.status(400).send({ message: 'Domain is required!' });
+  }
+
+  try {
+    const snapshot = await db
+      .collection('tasks')
+      .where('domain', '==', domain) 
+      .get();
+
+    if (snapshot.empty) {
+      return res.status(404).send({ message: 'No tasks found for the specified domain!' });
+    }
+
+    const tasks = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    res.status(200).send(tasks);
+  } catch (error) {
+    res.status(500).send({ message: 'Error fetching tasks from Firebase', error });
+  }
+});
+
 
 app.get('/tasks/:id', async (req, res) => {
   try {
