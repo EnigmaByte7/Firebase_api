@@ -7,6 +7,7 @@ const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const cors = require("cors");
 
+
 const app = express();
 var serviceAccount = require("./key.json");
 
@@ -15,8 +16,10 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
+app.use(cors({ origin: 'http://localhost:5173' }));
 
-app.use(cors({origin: true}));
+
+
 
 app.get('/test', (req, res) => {
   return res.status(200).send('Express is live');
@@ -262,6 +265,32 @@ app.post('/api/update/:userId', async (req, res) => {
   }
 });
 
+app.post("/update-user/:id", async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  console.log(updates)
+  if(updates.password){
+    const epas = await bcrypt.hash(updates.password, 10);
+    updates.password = epas;
+  }
+
+  try {
+    const userRef = db.collection("users").doc(id); 
+
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await userRef.update(updates);
+
+    res.status(200).json({ message: "User updated successfully" });
+  } catch (error) {
+    console.error("Error updating user:", error);
+    res.status(500).json({ message: "Failed to update user", error: error.message });
+  }
+});
 
 
 app.get('/api/get-user/:userId', async (req, res) => {
