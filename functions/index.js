@@ -142,6 +142,25 @@ app.get('/get-tasks', async (req, res) => {
   }
 });
 
+app.get('/delete-task/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const taskRef = db.collection('tasks').doc(id); 
+    const taskSnapshot = await taskRef.get();
+
+    if (!taskSnapshot.exists) {
+      return res.status(404).send({ message: 'Task not found!' });
+    }
+
+    await taskRef.delete();
+    res.status(200).send({ message: 'Task deleted successfully!' });
+  } catch (error) {
+    res.status(500).send({ message: 'Error deleting task from Firebase', error });
+  }
+});
+
+
 app.post('/get-tasks-by-domain', async (req, res) => {
   const { domain } = req.body;
   console.log(domain, "heloo")
@@ -317,16 +336,15 @@ app.get('/api/get-user/:userId', async (req, res) => {
 });
 
 
-app.get('/pending/:adminId', async (req, res) => {
-  const { adminId } = req.params;
+app.get('/pending/:adminId/:domain', async (req, res) => {
+  const { adminId, domain } = req.params;
 
   console.log(adminId);
   try {
     const usersRef = admin.firestore().collection('users');
     const snapshot = await usersRef
-      .where('ups', '==', 0)
-      .where('downs', '==', 0)
       .where('isblacklisted', '==', 'no')
+      .where('domain', '==', domain)
       .get();
 
     if (snapshot.empty) {
@@ -598,7 +616,7 @@ app.get('/api/bookmarked/:adminId', async (req, res) => {
     const users = [];
     for (const userId of submissionIds) {
       const userDoc = await db.collection('users').doc(userId).get();
-      if (userDoc.exists) {
+      if (userDoc.exists && !userDoc.data().email.includes('admin')) {
         const userData = { id: userDoc.id, name: userDoc.data().name };
         users.push(userData);
       }
