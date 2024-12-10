@@ -407,9 +407,11 @@ app.get('/api/get-user/:userId', async (req, res) => {
 
 
 app.get('/pending/:adminId/:domain', async (req, res) => {
-  const { adminId, domain } = req.params;
+  let { adminId, domain } = req.params;
+  adminId  = adminId.replace(/['"]+/g, '');
 
   console.log(adminId);
+
   try {
     const usersRef = admin.firestore().collection('users');
     const snapshot = await usersRef
@@ -558,6 +560,7 @@ app.post('/api/downvote', async (req, res) => {
 
 app.post('/api/bookmark', async (req, res) => {
   const { adminId, userId } = req.body;
+  console.log(adminId, 'yoo')
 
   try {
     const userRef = db.collection('users').doc(userId);
@@ -653,7 +656,7 @@ app.post('/leaderboard', async (req, res) => {
       }));
 
     leaderboard.sort((a, b) => b.net - a.net);
-
+      console.log(leaderboard.length)
     return res.json(leaderboard);
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
@@ -665,7 +668,7 @@ app.post('/leaderboard', async (req, res) => {
 
 app.get('/api/bookmarked/:adminId', async (req, res) => {
   const { adminId } = req.params;
-
+   console.log(adminId, 'you')
   try {
     const adminDoc = await db.collection('users').doc(adminId).get();
     if (!adminDoc.exists) {
