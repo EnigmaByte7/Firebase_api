@@ -28,7 +28,16 @@ app.get('/test', (req, res) => {
 app.post('/api/register/', async (req, res)=>{
     try{
 
+
         const profile = req.body;
+
+        // const existingUser = await db.collection('users')
+        // .where('email', '==', profile.email)
+        // .get();
+
+        // if (!existingUser.empty) {
+        //     return res.status(400).json({ message: 'Email already exists. Registration not allowed.' });
+        // }
         const pas = uuidv4().slice(0, 8);
         const epas = await bcrypt.hash(pas, 10);
         profile.password = epas;
@@ -53,7 +62,7 @@ app.post('/api/register/', async (req, res)=>{
           if(sent.accepted.length > 0){
             let doc = await db.collection('users').add(profile);
             console.log(profile)
-            return res.status(200).json({message:'Registerd'});
+            return res.status(200).json({message:'User Registered Successfully!', ok:'ok'});
           }
           else{
             return res.status(500).send({error : 'Error sending mail'})
@@ -65,6 +74,58 @@ app.post('/api/register/', async (req, res)=>{
         res.status(500).send(e.message);
     }
 })
+
+
+app.post('/api/reset', async (req, res) => {
+  try {
+      let { email, old, newp} = req.body;
+
+      const querySnapshot = await db.collection('users')
+          .where('email', '==', email)
+          .get();
+
+      if (querySnapshot.empty) {
+          return res.status(400).json({ message: 'User does not exist!' });
+      }
+
+      const userDoc = querySnapshot.docs[0];
+      const userData = userDoc.data();
+
+      console.log(old, userData.password)
+
+      const isPasswordCorrect = await bcrypt.compare(old, userData.password);
+      if (!isPasswordCorrect) {
+          return res.status(400).json({ message: 'Incorrect old password!' });
+      }
+
+      const newHashedPassword = await bcrypt.hash(newp, 10);
+      await userDoc.ref.update({ password: newHashedPassword });
+
+      // const transporter = nodemailer.createTransport({
+      //   service: 'Gmail',
+      //   auth: {
+      //     user: 'yashjec77@gmail.com',
+      //     pass: 'fktc xiiy venm vrhs',
+      //   },
+      // });
+  
+
+      // const mailOptions = {
+      //   from: 'saxenay117@gmail.com',
+      //   to: email,
+      //   subject: 'JLUG Interview Desk Account Password Reset',
+      //   text: `Hello👋 ! Here is your new password for JLUG Interview Desk : ${newp}`,
+      // };
+
+      // await transporter.sendMail(mailOptions);
+
+      res.status(200).json({ message: 'Password reset successfully and email sent!', ok:'ok' });
+  } catch (error) {
+      console.error('Error resetting password:', error);
+      res.status(500).json({ message: 'An error occurred while resetting the password.' });
+  }
+});
+
 
 
 
@@ -148,6 +209,7 @@ app.get('/delete-task/:id', async (req, res) => {
   try {
     const taskRef = db.collection('tasks').doc(id); 
     const taskSnapshot = await taskRef.get();
+
 
     if (!taskSnapshot.exists) {
       return res.status(404).send({ message: 'Task not found!' });
@@ -238,6 +300,14 @@ app.post('/api/submit-task', async (req, res) => {
   const { taskId, submissionUrl, userId } = req.body;
 
   try {
+    const existingSub = await db.collection('submissions')
+    .where('userId', '==', userId)
+    .where('taskId', '==', taskId)
+    .get()
+
+    if( !existingSub.empty()){
+      return  res.status(200).send({message: 'Task already submitted!'})
+    }
     const submissionRef = db.collection('submissions').doc(); 
     const submissionData = {
       taskId,
@@ -441,7 +511,7 @@ app.post('/api/upvote', async (req, res) => {
     }
 
     await userRef.update({ ups: userData.ups + 1 });
-    await userRef.update({ approvedby: adminData.approvedby ? [...adminData.approvedby, adminId] : [adminId] });
+    await userRef.update({ approvedby: adminId });
 
     await adminRef.update({ approvedby: adminData.approvedby ? [...adminData.approvedby, userId] : [userId] });
 
@@ -553,39 +623,34 @@ app.post('/api/blacklist', async (req, res) => {
 app.post('/leaderboard', async (req, res) => {
   try {
     const { domain } = req.body;
-    const adminDomain = domain;
 
-    if (!adminDomain) {
+    if (!domain) {
       return res.status(400).json({ error: 'Domain is required' });
     }
 
     const usersSnapshot = await db.collection('users').get();
-    console.log("Fetched users snapshot:", usersSnapshot.docs.length);  
+    console.log("Fetched users snapshot:", usersSnapshot.docs.length);
 
     let leaderboard = usersSnapshot.docs
-      .map(doc => doc.data())
+      .map(doc => ({
+        id: doc.id,  
+        ...doc.data(), 
+      }))
       .filter(user => {
-        return (  
-          !user.email.includes('admin') &&  
-          user.domain === adminDomain &&  
-          !user.blacklisted  
+        return (
+          !user.email.includes('admin') && 
+          user.domain === domain && 
+          !user.blacklisted
         );
       })
       .map(user => ({
+        dp: user.dp,
+        id: user.id, 
         name: user.name,
-        ups: user.ups || 0, 
-        downs: user.downs || 0,  
-        net: (user.ups || 0) - (user.downs || 0), 
+        ups: user.ups || 0,
+        downs: user.downs || 0,
+        net: (user.ups || 0) - (user.downs || 0),
       }));
-
-    leaderboard = leaderboard.map((user, index) => {
-      const doc = usersSnapshot.docs[index];
-      return {
-        ...user,
-        id: doc.id,  
-      };
-    });
-
 
     leaderboard.sort((a, b) => b.net - a.net);
 
@@ -595,6 +660,7 @@ app.post('/leaderboard', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 app.get('/api/bookmarked/:adminId', async (req, res) => {
