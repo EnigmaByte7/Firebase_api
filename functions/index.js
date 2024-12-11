@@ -91,7 +91,6 @@ app.post('/api/reset', async (req, res) => {
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
 
-      console.log(old, userData.password)
 
       const isPasswordCorrect = await bcrypt.compare(old, userData.password);
       if (!isPasswordCorrect) {
@@ -147,7 +146,6 @@ app.post('/api/login', async (req, res) => {
         const userDoc = querySnapshot.docs[0]; 
         const user = userDoc.data();
 
-        console.log(user)
 
         const validPassword = await bcrypt.compare(pass, user.password);
 
@@ -225,7 +223,6 @@ app.get('/delete-task/:id', async (req, res) => {
 
 app.post('/get-tasks-by-domain', async (req, res) => {
   const { domain } = req.body;
-  console.log(domain, "heloo")
 
   if (!domain) {
     return res.status(400).send({ message: 'Domain is required!' });
@@ -266,12 +263,10 @@ app.get('/tasks/:id', async (req, res) => {
 app.post('/update-task/:id', async (req, res) => {
   const { id } = req.params;
   const { tname, tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by, adminid } = req.body;
-  console.log(id, tname,  tdesc, tcatg, tstat, tsub, tdead, tfileUrl, by, adminid)
 
   try {
     const taskRef = db.collection('tasks').doc(id);
     const taskSnapshot = await taskRef.get();
-    console.log(taskSnapshot)
 
     if (!taskSnapshot.exists) {
       return res.status(404).send({ message: 'Task not found!' });
@@ -298,17 +293,21 @@ app.post('/update-task/:id', async (req, res) => {
 
 app.post('/api/submit-task', async (req, res) => {
   const { taskId, submissionUrl, userId } = req.body;
+  console.log(taskId, submissionUrl, userId);
 
   try {
     const existingSub = await db.collection('submissions')
-    .where('userId', '==', userId)
-    .where('taskId', '==', taskId)
-    .get()
+      .where('userId', '==', userId)
+      .where('taskId', '==', taskId)
+      .get();
 
-    if( !existingSub.empty()){
-      return  res.status(200).send({message: 'Task already submitted!'})
+    if (!existingSub.empty) {
+      console.log(existingSub);
+      console.log('exists!!');
+      return res.status(400).send({ message: 'Task already submitted!' });
     }
-    const submissionRef = db.collection('submissions').doc(); 
+
+    const submissionRef = db.collection('submissions').doc();
     const submissionData = {
       taskId,
       submissionUrl,
@@ -337,7 +336,6 @@ app.post('/api/update/:userId', async (req, res) => {
     const userRef = db.collection('users').doc(userId); 
 
     const userDoc = await userRef.get();
-    console.log(userDoc)
 
     if (!userDoc.exists) {
       return res.status(404).send({ error: 'User not found' });
@@ -384,12 +382,10 @@ app.post("/update-user/:id", async (req, res) => {
 
 app.get('/api/get-user/:userId', async (req, res) => {
   const { userId } = req.params; 
-  console.log('Fetching user with ID:', userId);
 
   try {
     const userRef = db.collection('users').doc(userId); 
     const userDoc = await userRef.get(); 
-    console.log(userDoc)
 
     if (!userDoc.exists) {
       console.log(`User with ID ${userId} not found.`);
@@ -397,7 +393,6 @@ app.get('/api/get-user/:userId', async (req, res) => {
     }
 
     const userData = { id: userDoc.id, ...userDoc.data() }; 
-    console.log('User data:', userData);
     res.status(200).send(userData); 
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -409,8 +404,6 @@ app.get('/api/get-user/:userId', async (req, res) => {
 app.get('/pending/:adminId/:domain', async (req, res) => {
   let { adminId, domain } = req.params;
   adminId  = adminId.replace(/['"]+/g, '');
-
-  console.log(adminId);
 
   try {
     const usersRef = admin.firestore().collection('users');
@@ -478,8 +471,6 @@ app.get('/api/get-submissions/:userId', async (req, res) => {
         fileUrl: submissionData.submissionUrl,
       });
     }
-
-    console.log(results)
 
     res.status(200).send(results); 
   } catch (error) {
@@ -560,7 +551,7 @@ app.post('/api/downvote', async (req, res) => {
 
 app.post('/api/bookmark', async (req, res) => {
   const { adminId, userId } = req.body;
-  console.log(adminId, 'yoo')
+  console.log(adminId, userId)
 
   try {
     const userRef = db.collection('users').doc(userId);
@@ -577,7 +568,8 @@ app.post('/api/bookmark', async (req, res) => {
     const adminData = adminDoc.data();
 
     let message = '';
-    if (userData.submissions.includes(userId)) {
+    console.log(adminData.submissions)
+    if (adminData.submissions.includes(userId)) {
       await adminRef.update({
         submissions: adminData.submissions.filter((subId) => subId !== userId),
       });
@@ -632,7 +624,6 @@ app.post('/leaderboard', async (req, res) => {
     }
 
     const usersSnapshot = await db.collection('users').get();
-    console.log("Fetched users snapshot:", usersSnapshot.docs.length);
 
     let leaderboard = usersSnapshot.docs
       .map(doc => ({
@@ -643,7 +634,7 @@ app.post('/leaderboard', async (req, res) => {
         return (
           !user.email.includes('admin') && 
           user.domain === domain && 
-          !user.blacklisted
+          user.isblacklisted === "no"
         );
       })
       .map(user => ({
@@ -656,7 +647,7 @@ app.post('/leaderboard', async (req, res) => {
       }));
 
     leaderboard.sort((a, b) => b.net - a.net);
-      console.log(leaderboard.length)
+      console.log(leaderboard)
     return res.json(leaderboard);
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
@@ -724,7 +715,6 @@ app.delete('/api/delete-bookmark/:adminId/:userId', async (req, res) => {
 
 app.get('/api/users/:domain', async (req, res) => {
   const { domain } = req.params;
-  console.log(domain)
 
   if (!domain) {
     return res.status(400).json({ error: 'Domain is required' });
@@ -741,7 +731,6 @@ app.get('/api/users/:domain', async (req, res) => {
     });
 
 
-    console.log(users)
     res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
