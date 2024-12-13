@@ -729,5 +729,6 @@ app.get("/api/users/:domain", async (req, res) => {
   }
 });
 
-
-exports.app = onRequest(app);
+app.listen(3000, () => {
+  console.log(`Server is running on port 3000`);
+});
