@@ -6,6 +6,8 @@ const express = require("express");
 const {onRequest} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const cors = require("cors");
+const crypto = require('crypto');
+const otpMap = new Map();
 require("dotenv").config();
 
 
@@ -68,6 +70,72 @@ app.post("/api/register/", async (req, res)=>{
   } catch (e) {
     console.log(e);
     res.status(500).send(e.message);
+  }
+});
+
+app.post('/api/send-otp', async (req, res) => {
+  try {
+      const { email } = req.body;
+
+      const querySnapshot = await db.collection('users')
+          .where('email', '==', email)
+          .get();
+
+      if (querySnapshot.empty) {
+          return res.status(400).json({ message: 'User does not exist!' });
+      }
+
+      const otp = crypto.randomInt(100000, 999999);
+      otpMap.set(email, otp);
+
+      const transporter = nodemailer.createTransport({
+          service: 'Gmail',
+          auth: { user: 'your-email@gmail.com', pass: 'your-app-password' },
+      });
+
+      const mailOptions = {
+          from: 'your-email@gmail.com',
+          to: email,
+          subject: 'Password Reset OTP',
+          text: `Your OTP for password reset is: ${otp}`,
+      };
+
+      await transporter.sendMail(mailOptions);
+
+      res.status(200).json({ message: 'OTP sent successfully!', ok: true });
+  } catch (error) {
+      console.error('Error sending OTP:', error);
+      res.status(500).json({ message: 'Failed to send OTP.' });
+  }
+});
+
+
+app.post('/api/verify-otp', async (req, res) => {
+  try {
+      const { email, otp, newp } = req.body;
+
+      const storedOtp = otpMap.get(email);
+      if (!storedOtp || parseInt(otp) !== storedOtp) {
+          return res.status(400).json({ message: 'Invalid or expired OTP!' });
+      }
+
+      otpMap.delete(email); 
+      const querySnapshot = await db.collection('users')
+          .where('email', '==', email)
+          .get();
+
+      if (querySnapshot.empty) {
+          return res.status(400).json({ message: 'User does not exist!' });
+      }
+
+      const userDoc = querySnapshot.docs[0];
+      const newHashedPassword = await bcrypt.hash(newp, 10);
+      await userDoc.ref.update({ password: newHashedPassword });
+
+      res.status(200).json({ message: 'Password reset successfully!', ok: true });
+  } catch (error) {
+      console.error('Error resetting password:', error);
+      res.status(500).json({ message: 'Failed to reset password.' });
   }
 });
 
