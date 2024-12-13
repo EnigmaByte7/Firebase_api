@@ -89,16 +89,21 @@ app.post('/api/send-otp', async (req, res) => {
       otpMap.set(email, otp);
 
       const transporter = nodemailer.createTransport({
-          service: 'Gmail',
-          auth: { user: 'your-email@gmail.com', pass: 'your-app-password' },
+        service: "Gmail",
+        auth: {
+          user: "yashjec77@gmail.com",
+          pass: "fktc xiiy venm vrhs",
+        },
       });
 
-      const mailOptions = {
-          from: 'your-email@gmail.com',
-          to: email,
-          subject: 'Password Reset OTP',
-          text: `Your OTP for password reset is: ${otp}`,
-      };
+    const mailOptions = {
+      from: "saxenay117@gmail.com",
+      to: profile.email,
+      subject: "Password Reset Request",
+      text: `Hello👋 ! 
+      Here is your OTP for Password Change Request : ${otp}`,
+    };
+
 
       await transporter.sendMail(mailOptions);
 
