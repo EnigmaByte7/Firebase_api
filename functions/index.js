@@ -17,7 +17,7 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-app.use(cors({origin: "https://jlug-interview-desk-frontend.vercel.app/"}));
+app.use(cors({origin: "https://jlug-interview-desk-frontend.vercel.app"}));
 
 
 app.get("/test", (req, res) => {
@@ -124,6 +124,7 @@ app.post("/api/reset", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const {email, pass} = req.body;
+    console.log(req.body)
 
     if (!email || !pass) {
       return res.status(400).send({message: "Email id and password is required"});
