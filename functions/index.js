@@ -17,7 +17,7 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-app.use(cors({origin: "http://localhost:5173"}));
+app.use(cors({origin: "https://jlug-interview-desk-frontend.vercel.app/"}));
 
 
 app.get("/test", (req, res) => {
