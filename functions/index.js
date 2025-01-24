@@ -571,7 +571,7 @@ app.post("/api/upvote", async (req, res) => {
     }
 
     await userRef.update({ups: userData.ups + 1});
-    await userRef.update({approvedby: adminId});
+    await userRef.update({approvedby: userData.approvedby ? [...userData.approvedby, adminId] : [adminId]});
 
     await adminRef.update({approvedby: adminData.approvedby ? [...adminData.approvedby, userId] : [userId]});
 
