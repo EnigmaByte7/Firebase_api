@@ -486,7 +486,7 @@ app.get("/pending/:adminId/:domain", async (req, res) => {
     const pendingApplicants = snapshot.docs
         .map((doc) => ({id: doc.id, ...doc.data()}))
         .filter(
-            (user) => !((user.email || "").includes("admin")) &&
+            (user) => !((user.email || "").includes("@jlug.club")) &&
                 !(user.approvedby || []).includes(adminId),
         );
 
